@@ -92,12 +92,8 @@ public class OperatonSpringSecurityOAuth2AutoConfiguration {
         ProcessEngineAuthenticationFilter.AUTHENTICATION_PROVIDER_PARAM, OAuth2AuthenticationProvider.class.getName()));
     // make sure the filter is registered after the Spring Security Filter Chain
     filterRegistration.setOrder(SecurityFilterProperties.DEFAULT_FILTER_ORDER + 1);
-    if (neoEnabled) {
-      // the webapps-neo plugin APIs live under the neo application path
-      filterRegistration.addUrlPatterns(webappPath + APP_PATH, webappPath + API_PATH, neoPath + API_PATH);
-    } else {
-      filterRegistration.addUrlPatterns(webappPath + APP_PATH, webappPath + API_PATH);
-    }
+    // legacy paths only, webapps-neo registers its own filter
+    filterRegistration.addUrlPatterns(webappPath + APP_PATH, webappPath + API_PATH);
     filterRegistration.setDispatcherTypes(DispatcherType.REQUEST);
     return filterRegistration;
   }

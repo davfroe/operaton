@@ -17,11 +17,15 @@
  */
 package org.operaton.bpm.spring.boot.starter.webapp.neo;
 
+import jakarta.servlet.DispatcherType;
+
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 import org.springframework.core.io.ResourceLoader;
@@ -42,6 +46,7 @@ import org.operaton.bpm.spring.boot.starter.property.WebappProperty;
 import org.operaton.bpm.spring.boot.starter.webapp.neo.filter.LazyDelegateFilter.InitHook;
 import org.operaton.bpm.spring.boot.starter.webapp.neo.filter.LazyInitRegistration;
 import org.operaton.bpm.spring.boot.starter.webapp.neo.filter.ResourceLoaderDependingFilter;
+import org.operaton.bpm.webapp.neo.impl.security.auth.ContainerBasedAuthenticationFilter;
 
 /**
  * Auto configuration for the new web apps (webapps-neo). The SPA is served as a
@@ -58,6 +63,9 @@ public class OperatonBpmWebappAutoConfiguration implements WebMvcConfigurer {
 
   /** Document the SPA fetches at boot to learn how it was configured. */
   protected static final String CONFIG_PATH = "/config.json";
+
+  protected static final String OAUTH2_AUTHENTICATION_PROVIDER =
+      "org.operaton.bpm.spring.boot.starter.security.oauth2.impl.OAuth2AuthenticationProvider";
 
   private final ResourceLoader resourceLoader;
 
@@ -99,6 +107,26 @@ public class OperatonBpmWebappAutoConfiguration implements WebMvcConfigurer {
   @Bean
   NeoClientConfigResolver neoClientConfigResolver() {
     return new NeoClientConfigResolver(properties, environment);
+  }
+
+  /**
+   * Resolves the user of an OAuth2 session for the neo API. Only active with the security
+   * starter on the classpath and a client registration configured.
+   */
+  @Bean
+  @ConditionalOnClass(name = OAUTH2_AUTHENTICATION_PROVIDER)
+  FilterRegistrationBean<ContainerBasedAuthenticationFilter> neoContainerBasedAuthenticationFilter(
+      NeoClientConfigResolver resolver) {
+    FilterRegistrationBean<ContainerBasedAuthenticationFilter> registration =
+        new FilterRegistrationBean<>(new ContainerBasedAuthenticationFilter());
+    registration.setName("Neo Container Based Authentication Filter");
+    registration.addInitParameter("authentication-provider", OAUTH2_AUTHENTICATION_PROVIDER);
+    // right after the Spring Security filter chain (order -100)
+    registration.setOrder(-99);
+    registration.addUrlPatterns(properties.getWebapp().getNeo().getApplicationPath() + "/api/*");
+    registration.setDispatcherTypes(DispatcherType.REQUEST);
+    registration.setEnabled(resolver.firstClientRegistrationId().isPresent());
+    return registration;
   }
 
   /**

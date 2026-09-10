@@ -38,7 +38,8 @@ public final class AuthenticationUtil {
 
   protected static final WebappLogger LOGGER = WebappLogger.INSTANCE;
 
-  protected static final String CAM_AUTH_SESSION_KEY = "authenticatedUser";
+  // distinct from the legacy web apps, which share the session
+  protected static final String CAM_AUTH_SESSION_KEY = "OPERATON_NEO_AUTHENTICATED_USER";
 
   /**
    * The application ids a login may be granted for. "neo" is the single-page app this module

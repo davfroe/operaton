@@ -18,6 +18,8 @@
 package org.operaton.bpm.webapp.neo.impl.security.auth;
 
 import java.util.Date;
+import java.util.HashSet;
+import java.util.List;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.Response.Status;
 
@@ -320,6 +322,71 @@ class UserAuthenticationResourceTest {
 
     // then
     assertThat(response.getStatus()).isEqualTo(Status.FORBIDDEN.getStatusCode());
+  }
+
+  @Test
+  void shouldAnswerUnauthorizedWhenTheSessionCarriesNoAuthentication() {
+    // given
+    clearAuthentication();
+
+    // when
+    UserAuthenticationResource authResource = new UserAuthenticationResource();
+    authResource.request = new MockHttpServletRequest();
+    Response response = authResource.getAuthenticatedUser("webapps-test-engine");
+
+    // then a missing login is not a missing resource
+    assertThat(response.getStatus()).isEqualTo(Status.UNAUTHORIZED.getStatusCode());
+    assertThat(response.getEntity())
+        .isInstanceOf(UserAuthenticationResource.UnauthenticatedDto.class)
+        .extracting(dto -> ((UserAuthenticationResource.UnauthenticatedDto) dto).getReason())
+        .isEqualTo("unauthenticated");
+  }
+
+  @Test
+  void shouldAnswerUnauthorizedWhenTheSessionHasNoAuthenticationForThisEngine() {
+    // given a session that is logged in somewhere else
+    setAuthentication("jonny", "another-engine");
+
+    // when
+    UserAuthenticationResource authResource = new UserAuthenticationResource();
+    authResource.request = new MockHttpServletRequest();
+    Response response = authResource.getAuthenticatedUser("webapps-test-engine");
+
+    // then
+    assertThat(response.getStatus()).isEqualTo(Status.UNAUTHORIZED.getStatusCode());
+  }
+
+  @Test
+  void shouldStillAnswerNotFoundForAnEngineThatDoesNotExist() {
+    // given
+    clearAuthentication();
+
+    // when
+    UserAuthenticationResource authResource = new UserAuthenticationResource();
+    authResource.request = new MockHttpServletRequest();
+    Response response = authResource.getAuthenticatedUser("no-such-engine");
+
+    // then 404 stays reserved for exactly this case
+    assertThat(response.getStatus()).isEqualTo(Status.NOT_FOUND.getStatusCode());
+  }
+
+  @Test
+  void shouldAnswerOkWhenTheSessionIsAuthenticatedForThisEngine() {
+    // given - the response DTO reads the authorized apps, and the shared setAuthentication
+    // helper leaves them null
+    UserAuthentication authentication = new UserAuthentication("jonny", "webapps-test-engine");
+    authentication.setAuthorizedApps(new HashSet<>(List.of("tasklist")));
+    Authentications authentications = new Authentications();
+    authentications.addOrReplace(authentication);
+    Authentications.setCurrent(authentications);
+
+    // when
+    UserAuthenticationResource authResource = new UserAuthenticationResource();
+    authResource.request = new MockHttpServletRequest();
+    Response response = authResource.getAuthenticatedUser("webapps-test-engine");
+
+    // then
+    assertThat(response.getStatus()).isEqualTo(Status.OK.getStatusCode());
   }
 
   protected void setAuthentication(String user, String engineName) {

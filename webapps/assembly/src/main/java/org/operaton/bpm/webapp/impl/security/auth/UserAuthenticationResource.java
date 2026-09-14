@@ -24,6 +24,7 @@ import jakarta.servlet.ServletContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.Response.Status;
 
@@ -54,16 +55,23 @@ public class UserAuthenticationResource {
   @GET
   @Path("/{processEngineName}")
   public Response getAuthenticatedUser(@PathParam("processEngineName") String engineName) {
+    // A missing login is not a missing resource. Answering 404 made "logged out"
+    // indistinguishable from a wrong URL, a misrouted proxy or an engine that does not exist,
+    // so 404 is now reserved for the last of those and everything else says 401.
+    if (ProcessEngineUtil.lookupProcessEngine(engineName) == null) {
+      return notFound();
+    }
+
     Authentications allAuthentications = Authentications.getCurrent();
 
     if (allAuthentications == null) {
-      return notFound();
+      return unauthenticated();
     }
 
     Authentication engineAuth = allAuthentications.getAuthenticationForProcessEngine(engineName);
 
     if (engineAuth == null) {
-      return notFound();
+      return unauthenticated();
     } else {
       return Response.ok(AuthenticationDto.fromAuthentication(engineAuth)).build();
     }
@@ -184,6 +192,24 @@ public class UserAuthenticationResource {
 
   protected Response notFound() {
     return Response.status(Status.NOT_FOUND).build();
+  }
+
+  /**
+   * Deliberately without a {@code WWW-Authenticate} header: the web apps carry their own login
+   * screen, and a challenge would make the browser open its native credentials dialog instead.
+   */
+  protected Response unauthenticated() {
+    return Response.status(Status.UNAUTHORIZED)
+        .type(MediaType.APPLICATION_JSON)
+        .entity(new UnauthenticatedDto())
+        .build();
+  }
+
+  /** The body of a 401 from this resource, so clients can tell it apart by content, not by code. */
+  public static class UnauthenticatedDto {
+    public String getReason() {
+      return "unauthenticated";
+    }
   }
 
   private boolean isWebappsAuthenticationLoggingEnabled(ProcessEngine processEngine) {

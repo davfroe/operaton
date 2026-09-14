@@ -914,7 +914,9 @@
     "sso": "Login with SSO",
     "documentation": "Documentation",
     "source": "Source",
-    "error": "Login failed. Please check your user name and password."
+    "error": "Login failed. Please check your user name and password.",
+    "not-authorized-for-app": "Your account is not enabled for {{app}}. An administrator has to grant your user or group access to the application.",
+    "authorized-for-instead": "You do have access to: {{apps}}."
   },
   "setup": {
     "title": "Set up Operaton",

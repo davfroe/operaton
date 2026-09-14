@@ -35,7 +35,10 @@ const APP_NAME = "neo";
 const start_session = (state, username, password) => {
   const headers = new Headers();
   set_request_headers(headers, state);
-  headers.set("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8");
+  headers.set(
+    "Content-Type",
+    "application/x-www-form-urlencoded;charset=UTF-8",
+  );
 
   return fetch(`${_url_auth()}/login/${APP_NAME}`, {
     method: "POST",
@@ -95,6 +98,22 @@ const verify_credentials = (state, username, password) =>
     );
 
 /**
+ * The typed body a refused login carries when the account has no access to this app, or
+ * undefined for every other failure. Anything unreadable counts as "other": a login screen is
+ * the wrong place to surface a parsing problem.
+ */
+const read_refusal = async (rejection) => {
+  if (rejection?.status !== 403 || typeof rejection.json !== "function")
+    return undefined;
+  try {
+    const body = await rejection.json();
+    return body?.type === "NotAuthorizedForApp" ? body : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/**
  * Login new user
  * @param {Object} state - Application state
  * @param username User name
@@ -122,13 +141,20 @@ const login = (
         data: "authenticated",
       };
     })
-    .catch(
-      () =>
-        (state.auth.logged_in.value = {
-          status: RESPONSE_STATE.ERROR,
-          data: "wrong_login",
-        }),
-    );
+    .catch(async (rejection) => {
+      // A refused login is not always a wrong password. The server says so in the body when
+      // the account simply has no access to this app, and that is the one case the user can
+      // do something about - ask an administrator.
+      const refusal = await read_refusal(rejection);
+      state.auth.logged_in.value = refusal
+        ? {
+            status: RESPONSE_STATE.ERROR,
+            data: "not_authorized_for_app",
+            app: refusal.app,
+            authorized_apps: refusal.authorizedApps ?? [],
+          }
+        : { status: RESPONSE_STATE.ERROR, data: "wrong_login" };
+    });
 };
 
 /** Forget everything this tab knows about who is signed in. */

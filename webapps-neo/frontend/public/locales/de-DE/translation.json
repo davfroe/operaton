@@ -914,7 +914,9 @@
     "sso": "Mit SSO anmelden",
     "documentation": "Dokumentation",
     "source": "Quellcode",
-    "error": "Anmeldung fehlgeschlagen. Bitte Benutzernamen und Passwort prüfen."
+    "error": "Anmeldung fehlgeschlagen. Bitte Benutzernamen und Passwort prüfen.",
+    "not-authorized-for-app": "Ihr Konto ist für {{app}} nicht freigeschaltet. Ein Administrator muss Ihrem Benutzer oder Ihrer Gruppe den Zugriff auf die Anwendung gewähren.",
+    "authorized-for-instead": "Zugriff haben Sie auf: {{apps}}."
   },
   "setup": {
     "title": "Operaton einrichten",

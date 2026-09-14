@@ -34,6 +34,7 @@ import { load_plugins } from "./plugins/loader.js";
 import { install_plugin_host } from "./plugins/host.js";
 import { plugins_for } from "./plugins/registry.js";
 import { PLUGIN_POINTS } from "./plugins/points.js";
+import { shows_login_screen } from "./helper/login_state.js";
 
 ("use strict");
 
@@ -141,10 +142,7 @@ const Routing = () => {
     );
   } else if (logged_in.value.data === "unknown") {
     void engine_rest.auth.is_authenticated(state);
-  } else if (
-    logged_in.value.data === "unauthenticated" ||
-    logged_in.value.data === "wrong_login"
-  ) {
+  } else if (shows_login_screen(logged_in.value.data)) {
     // Still asking whether this engine needs its first user; render nothing rather than
     // flashing a login mask that may be about to be replaced by the setup screen.
     if (
@@ -201,6 +199,18 @@ const Routing = () => {
             <div aria-live="polite">
               {logged_in.value.data === "wrong_login" ? (
                 <p class="error">{t("login.error")}</p>
+              ) : null}
+              {logged_in.value.data === "not_authorized_for_app" ? (
+                <p class="error">
+                  {t("login.not-authorized-for-app", {
+                    app: logged_in.value.app,
+                  })}{" "}
+                  {logged_in.value.authorized_apps?.length
+                    ? t("login.authorized-for-instead", {
+                        apps: logged_in.value.authorized_apps.join(", "),
+                      })
+                    : null}
+                </p>
               ) : null}
             </div>
 

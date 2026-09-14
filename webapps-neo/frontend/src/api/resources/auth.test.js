@@ -98,6 +98,55 @@ describe("api/resources/auth (basic mode)", () => {
       expect(sessionStorage.getItem(BASIC_AUTH_KEY)).toBeNull();
     });
 
+    it("names the app when the account has no access to it", async () => {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 403,
+        json: async () => ({
+          type: "NotAuthorizedForApp",
+          app: "neo",
+          authorizedApps: ["welcome", "cockpit"],
+        }),
+      });
+      auth.login(state, "alice", "right-password");
+      await vi.waitFor(() =>
+        expect(state.auth.logged_in.value.data).toBe("not_authorized_for_app"),
+      );
+      // the login screen needs both: what was refused, and where the user may go instead
+      expect(state.auth.logged_in.value.app).toBe("neo");
+      expect(state.auth.logged_in.value.authorized_apps).toEqual([
+        "welcome",
+        "cockpit",
+      ]);
+    });
+
+    it("falls back to wrong_login on a 403 that carries no reason", async () => {
+      // a missing CSRF token answers 403 as well, and says nothing we could show
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 403,
+        json: async () => ({ message: "Forbidden" }),
+      });
+      auth.login(state, "alice", "right-password");
+      await vi.waitFor(() =>
+        expect(state.auth.logged_in.value.data).toBe("wrong_login"),
+      );
+    });
+
+    it("falls back to wrong_login when the 403 body cannot be read", async () => {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 403,
+        json: async () => {
+          throw new Error("not json");
+        },
+      });
+      auth.login(state, "alice", "right-password");
+      await vi.waitFor(() =>
+        expect(state.auth.logged_in.value.data).toBe("wrong_login"),
+      );
+    });
+
     it("marks wrong_login on a failed response", async () => {
       fetchMock.mockResolvedValue({ ok: false, status: 401 });
       auth.login(state, "bob", "wrong");
@@ -187,7 +236,10 @@ describe("api/resources/auth (own backend, session)", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("logs in against the webapp's own auth resource and stores no password", async () => {
-    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ userId: "bob" }) });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ userId: "bob" }),
+    });
 
     await auth.login(state, "bob", "secret");
 
@@ -211,11 +263,16 @@ describe("api/resources/auth (own backend, session)", () => {
   });
 
   it("restores a session from the server rather than from stored credentials", async () => {
-    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ userId: "carol" }) });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ userId: "carol" }),
+    });
 
     await auth.is_authenticated(state);
 
-    expect(fetchMock.mock.calls[0][0]).toContain("/api/admin/auth/user/default");
+    expect(fetchMock.mock.calls[0][0]).toContain(
+      "/api/admin/auth/user/default",
+    );
     expect(state.auth.user.id.value).toBe("carol");
     expect(state.auth.logged_in.value.data).toBe("authenticated");
   });

@@ -25,6 +25,7 @@ import jakarta.servlet.ServletContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.Response.Status;
 
@@ -117,7 +118,7 @@ public class UserAuthenticationResource {
       if(isWebappsAuthenticationLoggingEnabled(processEngine)) {
         LOGGER.infoWebappFailedLogin(username, "not authorized");
       }
-      return forbidden();
+      return notAuthorizedForApp(appName, authorizedApps);
     }
 
     if (request != null) {
@@ -183,6 +184,54 @@ public class UserAuthenticationResource {
 
   protected Response forbidden() {
     return Response.status(Status.FORBIDDEN).build();
+  }
+
+  /**
+   * A login that failed because the account has no {@code ACCESS} on this application, rather
+   * than because the credentials were wrong. A bare 403 could not be told apart from a missing
+   * CSRF token, which left the only actionable case - an administrator has to grant access -
+   * looking like every other rejection.
+   *
+   * <p>The body carries the app that was refused and the ones the account may use, so a client
+   * can offer to go there instead. {@code message} is for clients that have no place to put a
+   * typed error; anything that reads {@code type} should translate its own text.
+   */
+  protected Response notAuthorizedForApp(String appName, Set<String> authorizedApps) {
+    return Response.status(Status.FORBIDDEN)
+        .type(MediaType.APPLICATION_JSON)
+        .entity(new NotAuthorizedForAppDto(appName, authorizedApps))
+        .build();
+  }
+
+  /** The body of a 403 that a login gets when the account has no access to the application. */
+  public static class NotAuthorizedForAppDto {
+
+    protected final String app;
+    protected final List<String> authorizedApps;
+
+    public NotAuthorizedForAppDto(String app, Set<String> authorizedApps) {
+      this.app = app;
+      this.authorizedApps = authorizedApps == null
+          ? List.of()
+          : authorizedApps.stream().sorted().toList();
+    }
+
+    public String getType() {
+      return "NotAuthorizedForApp";
+    }
+
+    public String getApp() {
+      return app;
+    }
+
+    public List<String> getAuthorizedApps() {
+      return authorizedApps;
+    }
+
+    public String getMessage() {
+      return "This account is not authorized for the '" + app + "' application. An administrator "
+          + "has to grant ACCESS on the Application resource to the user or one of their groups.";
+    }
   }
 
   protected Response notFound() {

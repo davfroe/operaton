@@ -215,6 +215,57 @@ class UserAuthenticationResourceTest {
     }
   }
 
+  @Test
+  void shouldExplainWhyALoginIsRefusedForThisApp() {
+    // given a user who exists and whose password is right, but who has no ACCESS on tasklist
+    User jonny = identityService.newUser("jonny");
+    jonny.setPassword("jonnyspassword");
+    identityService.saveUser(jonny);
+
+    Authorization welcomeOnly = authorizationService.createNewAuthorization(Authorization.AUTH_TYPE_GRANT);
+    welcomeOnly.setResource(Resources.APPLICATION);
+    welcomeOnly.setResourceId("welcome");
+    welcomeOnly.setPermissions(new Permissions[] {Permissions.ACCESS});
+    welcomeOnly.setUserId(jonny.getId());
+    authorizationService.saveAuthorization(welcomeOnly);
+
+    processEngineConfiguration.setAuthorizationEnabled(true);
+
+    // when
+    UserAuthenticationResource authResource = new UserAuthenticationResource();
+    authResource.request = new MockHttpServletRequest();
+    Response response = authResource.doLogin("webapps-test-engine", "tasklist", "jonny", "jonnyspassword");
+
+    // then the refusal says what it is, not just that it happened
+    assertThat(response.getStatus()).isEqualTo(Status.FORBIDDEN.getStatusCode());
+    assertThat(response.getEntity()).isInstanceOf(UserAuthenticationResource.NotAuthorizedForAppDto.class);
+
+    UserAuthenticationResource.NotAuthorizedForAppDto dto =
+        (UserAuthenticationResource.NotAuthorizedForAppDto) response.getEntity();
+    assertThat(dto.getType()).isEqualTo("NotAuthorizedForApp");
+    assertThat(dto.getApp()).isEqualTo("tasklist");
+    assertThat(dto.getAuthorizedApps()).contains("welcome").doesNotContain("tasklist");
+    // the legacy login form renders error.data.message verbatim
+    assertThat(dto.getMessage()).contains("tasklist").contains("administrator");
+  }
+
+  @Test
+  void shouldStillAnswerUnauthorizedForABadPassword() {
+    // given
+    User jonny = identityService.newUser("jonny");
+    jonny.setPassword("jonnyspassword");
+    identityService.saveUser(jonny);
+    processEngineConfiguration.setAuthorizationEnabled(true);
+
+    // when
+    UserAuthenticationResource authResource = new UserAuthenticationResource();
+    authResource.request = new MockHttpServletRequest();
+    Response response = authResource.doLogin("webapps-test-engine", "tasklist", "jonny", "wrong");
+
+    // then a wrong password stays distinguishable from a missing grant
+    assertThat(response.getStatus()).isEqualTo(Status.UNAUTHORIZED.getStatusCode());
+  }
+
   protected void setAuthentication(String user, String engineName) {
     Authentications authentications = new Authentications();
     authentications.addOrReplace(new UserAuthentication(user, engineName));
